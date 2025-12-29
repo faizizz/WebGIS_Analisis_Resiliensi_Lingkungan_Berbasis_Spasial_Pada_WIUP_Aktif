@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    
+    <!-- CSS Libraries -->
+    <link rel="stylesheet" href="css/leaflet.css">
+    <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+    <link rel="stylesheet" href="css/L.Control.Locate.min.css">
+    <link rel="stylesheet" href="css/qgis2web.css">
+    <link rel="stylesheet" href="css/fontawesome-all.min.css">
+    <link rel="stylesheet" href="css/leaflet.photon.css">
+    
+    <!-- Bootstrap 5 untuk dashboard -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #1abc9c;
+            --low-vegetation: #f7fcf5;
+            --medium-vegetation: #7bc77c;
+            --high-vegetation: #00441b;
+            --near-river: #67000d;
+            --medium-river: #fb7050;
+            --far-river: #fff5f0;
+            --steep-slope: #d7191c;
+            --medium-slope: #ffffc0;
+            --gentle-slope: #1a9641;
+            --low-resilience: #d7191c;
+            --medium-resilience: #ffffc0;
+            --high-resilience: #1a9641;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        #dashboard {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+        
+        /* Sidebar Styles */
+        #sidebar {
+            width: 350px;
+            background: linear-gradient(180deg, #2c3e50 0%, #1a252f 100%);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 3px 0 15px rgba(0,0,0,0.2);
+            z-index: 1000;
+            transition: transform 0.3s ease;
+        }
+        
+        #sidebar.collapsed {
+            transform: translateX(-350px);
+        }
+        
+        /* Header Sidebar */
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.2);
+        }
+        
+        .sidebar-header h3 {
+            margin: 0;
+            font-size: 1.4rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        /* Main Content */
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+        
+        /* Map Container */
+        #map-container {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            height: 100vh;
+        }
+        
+        #map {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        /* Control Buttons */
+        .map-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .control-btn {
+            background: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .control-btn:hover {
+            background: #f8f9fa;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        
+        /* Dashboard Cards */
+        .dashboard-card {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .card-header h5 {
+            margin: 0;
+            font-size: 1rem;
+            color: #ecf0f1;
+        }
+        
+        .stat-number {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #1abc9c;
+        }
+        
+        .stat-label {
+            font-size: 0.8rem;
+            color: #bdc3c7;
+        }
+        
+        /* Layer List */
+        .layer-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 10px;
+            margin-bottom: 5px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .layer-item:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .layer-item.active {
+            background: rgba(26, 188, 156, 0.2);
+            border-left: 3px solid #1abc9c;
+        }
+        
+        .layer-info {
+            display: flex;
+            align-items: center;
+            flex: 1;
+        }
+        
+        .layer-checkbox {
+            margin-right: 10px;
+        }
+        
+        /* Legend Styles */
+        .legend-section {
+            margin-bottom: 20px;
+        }
+        
+        .legend-title {
+            font-size: 0.9rem;
+            color: #1abc9c;
+            margin-bottom: 8px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            padding: 3px 0;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            margin-right: 10px;
+            border: 1px solid rgba(255,255,255,0.3);
+            flex-shrink: 0;
+        }
+        
+        .legend-label {
+            font-size: 0.85rem;
+            color: #ecf0f1;
+        }
+        
+        .legend-desc {
+            font-size: 0.75rem;
+            color: #bdc3c7;
+            margin-left: 5px;
+            font-style: italic;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            #sidebar {
+                width: 300px;
+            }
+            
+            #sidebar.collapsed {
+                transform: translateX(-300px);
+            }
+        }
+    </style>
+    
+    <title>Dashboard WebGIS - WIUP Project</title>
+</head>
+<body>
+    <div id="dashboard">
+        <!-- Sidebar -->
+        <div id="sidebar">
+            <div class="sidebar-header">
+                <h3>
+                    <i class="fas fa-map-marked-alt"></i>
+                    WIUP Dashboard
+                </h3>
+                <small class="text-muted" style="color: #bdc3c7 !important;">Pemetaan Terintegrasi</small>
+            </div>
+            
+            <div class="sidebar-content">
+                <!-- Stats Section -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-chart-bar"></i> STATISTIK WILAYAH</h5>
+                    </div>
+                    <div class="row text-center">
+                        <div class="col-6 mb-3">
+                            <div class="stat-number" id="total-features">0</div>
+                            <div class="stat-label">Total Fitur</div>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="stat-number" id="area-size">0 km²</div>
+                            <div class="stat-label">Luas Area</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Layer Control -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-layer-group"></i> KONTROL LAPISAN</h5>
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input" type="checkbox" id="layer-toggle-all" checked>
+                        </div>
+                    </div>
+                    <div id="layer-list">
+                        <!-- Layers will be populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <!-- Legend -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-palette"></i> LEGENDA & KETERANGAN</h5>
+                    </div>
+                    <div id="legend-content">
+                        <!-- Legend will be populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <!-- Feature Info -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-info-circle"></i> INFORMASI FITUR</h5>
+                    </div>
+                    <div id="feature-info">
+                        <p class="text-muted mb-0" style="color: #bdc3c7 !important;">
+                            <i class="fas fa-mouse-pointer"></i> Klik pada peta untuk melihat informasi detail
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="sidebar-footer p-3" style="border-top: 1px solid rgba(255,255,255,0.1);">
+                <small class="text-muted" style="color: #bdc3c7 !important;">
+                    <i class="fas fa-sync-alt"></i>
+                    <span id="last-update">Just now</span>
+                </small>
+            </div>
+        </div>
+        
+        <!-- Map Container -->
+        <div id="map-container">
+            <div id="map"></div>
+            
+            <!-- Map Controls -->
+            <div class="map-controls">
+                <button class="control-btn" id="toggle-sidebar" title="Toggle Sidebar">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <button class="control-btn" id="fullscreen-btn" title="Fullscreen">
+                    <i class="fas fa-expand"></i>
+                </button>
+            </div>
+            
+            <!-- Coordinate Display -->
+            <div class="position-absolute bottom-0 start-0 m-3 p-2 bg-dark text-white rounded" 
+                 style="z-index: 1000; opacity: 0.9; font-size: 0.85rem;">
+                <i class="fas fa-crosshairs"></i>
+                <span id="coordinates">0.000000, 0.000000</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Libraries -->
+    <script src="js/qgis2web_expressions.js"></script>
+    <script src="js/leaflet.js"></script>
+    <script src="js/L.Control.Layers.Tree.min.js"></script>
+    <script src="js/L.Control.Locate.min.js"></script>
+    <script src="js/leaflet.rotatedMarker.js"></script>
+    <script src="js/leaflet.pattern.js"></script>
+    <script src="js/leaflet-hash.js"></script>
+    <script src="js/Autolinker.min.js"></script>
+    <script src="js/rbush.min.js"></script>
+    <script src="js/labelgun.min.js"></script>
+    <script src="js/labels.js"></script>
+    <script src="js/leaflet.photon.js"></script>
+    
+    <!-- Data Files -->
+    <script src="data/WIUP_PESONAKHATULISTIWANUSANTARA_5.js"></script>
+    
+    <!-- Dashboard Script -->
+    <script>
+        // Dashboard Configuration dengan legenda detail
+        const dashboardConfig = {
+            projectName: "WIUP PESONA KHATULISTIWA NUSANTARA",
+            version: "1.0.0",
+            author: "WebGIS Team",
+            
+            // Layer configuration dengan legenda
+            layers: [
+                { 
+                    id: 'google-satellite', 
+                    name: 'Google Satellite', 
+                    type: 'basemap', 
+                    active: true,
+                    icon: 'fas fa-satellite'
+                },
+                { 
+                    id: 'wiup-slope', 
+                    name: 'WIUP Slope Class', 
+                    type: 'overlay', 
+                    active: true,
+                    icon: 'fas fa-mountain',
+                    legend: [
+                        { color: '#1a9641', label: 'Lereng Landai', description: '0-8°' },
+                        { color: '#ffffc0', label: 'Lereng Sedang', description: '8-15°' },
+                        { color: '#d7191c', label: 'Lereng Curam', description: '>15°' }
+                    ]
+                },
+                { 
+                    id: 'wiup-ndvi', 
+                    name: 'WIUP NDVI Classified', 
+                    type: 'overlay', 
+                    active: true,
+                    icon: 'fas fa-leaf',
+                    legend: [
+                        { color: '#f7fcf5', label: 'Vegetasi Rendah' },
+                        { color: '#7bc77c', label: 'Vegetasi Sedang' },
+                        { color: '#00441b', label: 'Vegetasi Tinggi' }
+                    ]
+                },
+                { 
+                    id: 'wiup-sungai', 
+                    name: 'WIUP Sungai Distance Class', 
+                    type: 'overlay', 
+                    active: true,
+                    icon: 'fas fa-water',
+                    legend: [
+                        { color: '#fff5f0', label: 'Jauh', description: '>250m' },
+                        { color: '#fb7050', label: 'Sedang', description: '150-250m' },
+                        { color: '#67000d', label: 'Dekat', description: '0-150m' }
+                    ]
+                },
+                { 
+                    id: 'resiliensi-index', 
+                    name: 'Resiliensi Index', 
+                    type: 'overlay', 
+                    active: true,
+                    icon: 'fas fa-shield-alt',
+                    legend: [
+                        { color: '#1a9641', label: 'Resiliensi Tinggi' },
+                        { color: '#ffffc0', label: 'Resiliensi Sedang' },
+                        { color: '#d7191c', label: 'Resiliensi Rendah' }
+                    ]
+                },
+                { 
+                    id: 'wiup-boundary', 
+                    name: 'Batas WIUP', 
+                    type: 'vector', 
+                    active: true,
+                    icon: 'fas fa-draw-polygon',
+                    legend: [
+                        { color: 'rgba(197,255,35,1.0)', label: 'Batas WIUP', description: 'Outline area' }
+                    ]
+                }
+            ]
+        };
+
+        // Variabel global untuk layer
+        var map;
+        var layer_GoogleSatellite_0;
+        var layer_WIUP_Slope_Class_1;
+        var layer_WIUP_NDVI_Classified_2;
+        var layer_WIUP_Sungai_Distance_Class_3;
+        var layer_Resiliensi_Index_FINALtif_4;
+        var layer_WIUP_PESONAKHATULISTIWANUSANTARA_5;
+
+        // Initialize Dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initDashboard();
+            initMap();
+        });
+
+        // Dashboard Functions
+        function initDashboard() {
+            // Toggle Sidebar
+            document.getElementById('toggle-sidebar').addEventListener('click', function() {
+                const sidebar = document.getElementById('sidebar');
+                sidebar.classList.toggle('collapsed');
+                this.innerHTML = sidebar.classList.contains('collapsed') 
+                    ? '<i class="fas fa-bars"></i>' 
+                    : '<i class="fas fa-times"></i>';
+            });
+
+            // Fullscreen Toggle
+            document.getElementById('fullscreen-btn').addEventListener('click', function() {
+                const elem = document.documentElement;
+                if (!document.fullscreenElement) {
+                    elem.requestFullscreen().catch(err => {
+                        console.log(`Error attempting to enable fullscreen: ${err.message}`);
+                    });
+                    this.innerHTML = '<i class="fas fa-compress"></i>';
+                } else {
+                    document.exitFullscreen();
+                    this.innerHTML = '<i class="fas fa-expand"></i>';
+                }
+            });
+
+            // Populate Layer List
+            populateLayerList();
+            
+            // Populate Legend
+            populateLegend();
+            
+            // Update Statistics
+            updateStatistics();
+        }
+
+        function populateLayerList() {
+            const layerList = document.getElementById('layer-list');
+            layerList.innerHTML = '';
+            
+            dashboardConfig.layers.forEach(layer => {
+                const layerItem = document.createElement('div');
+                layerItem.className = `layer-item ${layer.active ? 'active' : ''}`;
+                layerItem.innerHTML = `
+                    <div class="layer-info">
+                        <input class="form-check-input layer-checkbox" type="checkbox" 
+                               id="${layer.id}" ${layer.active ? 'checked' : ''}>
+                        <i class="${layer.icon} me-2"></i>
+                        <span>${layer.name}</span>
+                    </div>
+                `;
+                
+                // Add event listener for layer toggle
+                layerItem.querySelector('.layer-checkbox').addEventListener('change', function(e) {
+                    toggleLayer(layer.id, this.checked);
+                    layerItem.classList.toggle('active', this.checked);
+                });
+                
+                layerList.appendChild(layerItem);
+            });
+            
+            // Toggle all layers
+            document.getElementById('layer-toggle-all').addEventListener('change', function(e) {
+                const isChecked = this.checked;
+                document.querySelectorAll('.layer-checkbox').forEach(checkbox => {
+                    checkbox.checked = isChecked;
+                    const layerId = checkbox.id;
+                    toggleLayer(layerId, isChecked);
+                    
+                    // Update active state
+                    const layerItem = checkbox.closest('.layer-item');
+                    if (layerItem) {
+                        layerItem.classList.toggle('active', isChecked);
+                    }
+                });
+            });
+        }
+
+        function populateLegend() {
+            const legendContent = document.getElementById('legend-content');
+            legendContent.innerHTML = '';
+            
+            dashboardConfig.layers.forEach(layer => {
+                if (layer.legend && layer.legend.length > 0) {
+                    const legendSection = document.createElement('div');
+                    legendSection.className = 'legend-section';
+                    
+                    const title = document.createElement('div');
+                    title.className = 'legend-title';
+                    title.innerHTML = `<i class="${layer.icon}"></i> ${layer.name}`;
+                    
+                    legendSection.appendChild(title);
+                    
+                    layer.legend.forEach(legendItem => {
+                        const item = document.createElement('div');
+                        item.className = 'legend-item';
+                        item.innerHTML = `
+                            <div class="legend-color" style="background-color: ${legendItem.color};"></div>
+                            <div>
+                                <div class="legend-label">${legendItem.label}</div>
+                                ${legendItem.description ? `<div class="legend-desc">${legendItem.description}</div>` : ''}
+                            </div>
+                        `;
+                        legendSection.appendChild(item);
+                    });
+                    
+                    legendContent.appendChild(legendSection);
+                }
+            });
+        }
+
+        function updateStatistics() {
+            // Calculate total features from GeoJSON data
+            if (typeof json_WIUP_PESONAKHATULISTIWANUSANTARA_5 !== 'undefined') {
+                const totalFeatures = json_WIUP_PESONAKHATULISTIWANUSANTARA_5.features.length;
+                document.getElementById('total-features').textContent = totalFeatures;
+                
+                // Estimate area
+                const bounds = [[2.692974922873932,117.41057160899733],[2.8129670150313713,117.57442673153415]];
+                const areaKm = calculateArea(bounds);
+                document.getElementById('area-size').textContent = `${areaKm.toFixed(2)} km²`;
+            }
+            
+            // Update timestamp
+            const now = new Date();
+            document.getElementById('last-update').textContent = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+
+        function calculateArea(bounds) {
+            // Simple area calculation from bounds
+            const latDiff = bounds[1][0] - bounds[0][0];
+            const lngDiff = bounds[1][1] - bounds[0][1];
+            // Approximate area in km²
+            return Math.abs(latDiff * lngDiff * 111 * 111);
+        }
+
+        // ==================== MAP INITIALIZATION ====================
+        function initMap() {
+            // Inisialisasi peta
+            map = L.map('map', {
+                zoomControl: false,
+                maxZoom: 28,
+                minZoom: 1,
+                attributionControl: false
+            }).fitBounds([[2.692974922873932,117.41057160899733],[2.8129670150313713,117.57442673153415]]);
+
+            // Add attribution control
+            L.control.attribution({
+                position: 'bottomright',
+                prefix: '<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> | ' +
+                       '<a href="https://leafletjs.com" target="_blank">Leaflet</a> | ' +
+                       '<a href="https://qgis.org" target="_blank">QGIS</a>'
+            }).addTo(map);
+
+            var hash = new L.Hash(map);
+            var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+
+            // Add zoom control
+            var zoomControl = L.control.zoom({
+                position: 'topleft'
+            }).addTo(map);
+
+            // Add locate control
+            L.control.locate({locateOptions: {maxZoom: 19}}).addTo(map);
+
+            // Add scale control
+            L.control.scale({position: 'bottomleft'}).addTo(map);
+
+            // ==================== LAYER CREATION ====================
+            
+            // Layer: Google Satellite
+            map.createPane('pane_GoogleSatellite_0');
+            map.getPane('pane_GoogleSatellite_0').style.zIndex = 400;
+            layer_GoogleSatellite_0 = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+                pane: 'pane_GoogleSatellite_0',
+                opacity: 1.0,
+                attribution: '',
+                minZoom: 1,
+                maxZoom: 28,
+                minNativeZoom: 0,
+                maxNativeZoom: 19
+            });
+            map.addLayer(layer_GoogleSatellite_0);
+
+            // Layer: WIUP_Slope_Class_1
+            map.createPane('pane_WIUP_Slope_Class_1');
+            map.getPane('pane_WIUP_Slope_Class_1').style.zIndex = 401;
+            var img_WIUP_Slope_Class_1 = 'data/WIUP_Slope_Class_1.png';
+            var img_bounds_WIUP_Slope_Class_1 = [[2.71685902037554,117.44118459036619],[2.7996506334849705,117.56644187493775]];
+            layer_WIUP_Slope_Class_1 = new L.imageOverlay(img_WIUP_Slope_Class_1,
+                                                  img_bounds_WIUP_Slope_Class_1,
+                                                  {pane: 'pane_WIUP_Slope_Class_1'});
+            map.addLayer(layer_WIUP_Slope_Class_1);
+
+            // Layer: WIUP_NDVI_Classified_2
+            map.createPane('pane_WIUP_NDVI_Classified_2');
+            map.getPane('pane_WIUP_NDVI_Classified_2').style.zIndex = 402;
+            var img_WIUP_NDVI_Classified_2 = 'data/WIUP_NDVI_Classified_2.png';
+            var img_bounds_WIUP_NDVI_Classified_2 = [[2.7167543639927714,117.44083845993289],[2.7998569596443343,117.56655803043765]];
+            layer_WIUP_NDVI_Classified_2 = new L.imageOverlay(img_WIUP_NDVI_Classified_2,
+                                                  img_bounds_WIUP_NDVI_Classified_2,
+                                                  {pane: 'pane_WIUP_NDVI_Classified_2'});
+            map.addLayer(layer_WIUP_NDVI_Classified_2);
+
+            // Layer: WIUP_Sungai_Distance_Class_3
+            map.createPane('pane_WIUP_Sungai_Distance_Class_3');
+            map.getPane('pane_WIUP_Sungai_Distance_Class_3').style.zIndex = 403;
+            var img_WIUP_Sungai_Distance_Class_3 = 'data/WIUP_Sungai_Distance_Class_3.png';
+            var img_bounds_WIUP_Sungai_Distance_Class_3 = [[2.71685902037554,117.44118459036619],[2.7996506334849705,117.56644187493775]];
+            layer_WIUP_Sungai_Distance_Class_3 = new L.imageOverlay(img_WIUP_Sungai_Distance_Class_3,
+                                                          img_bounds_WIUP_Sungai_Distance_Class_3,
+                                                          {pane: 'pane_WIUP_Sungai_Distance_Class_3'});
+            map.addLayer(layer_WIUP_Sungai_Distance_Class_3);
+
+            // Layer: Resiliensi_Index_FINALtif_4
+            map.createPane('pane_Resiliensi_Index_FINALtif_4');
+            map.getPane('pane_Resiliensi_Index_FINALtif_4').style.zIndex = 404;
+            var img_Resiliensi_Index_FINALtif_4 = 'data/Resiliensi_Index_FINALtif_4.png';
+            var img_bounds_Resiliensi_Index_FINALtif_4 = [[2.71685902037554,117.44118459036619],[2.7996506334849705,117.56644187493775]];
+            layer_Resiliensi_Index_FINALtif_4 = new L.imageOverlay(img_Resiliensi_Index_FINALtif_4,
+                                                          img_bounds_Resiliensi_Index_FINALtif_4,
+                                                          {pane: 'pane_Resiliensi_Index_FINALtif_4'});
+            map.addLayer(layer_Resiliensi_Index_FINALtif_4);
+
+            // Layer: WIUP_PESONAKHATULISTIWANUSANTARA_5 (Vector)
+            map.createPane('pane_WIUP_PESONAKHATULISTIWANUSANTARA_5');
+            map.getPane('pane_WIUP_PESONAKHATULISTIWANUSANTARA_5').style.zIndex = 405;
+            map.getPane('pane_WIUP_PESONAKHATULISTIWANUSANTARA_5').style['mix-blend-mode'] = 'normal';
+            
+            // Style function untuk layer vektor
+            function style_WIUP_PESONAKHATULISTIWANUSANTARA_5_0() {
+                return {
+                    pane: 'pane_WIUP_PESONAKHATULISTIWANUSANTARA_5',
+                    opacity: 1,
+                    color: 'rgba(197,255,35,1.0)',
+                    dashArray: '',
+                    lineCap: 'butt',
+                    lineJoin: 'miter',
+                    weight: 2.0, 
+                    fill: true,
+                    fillOpacity: 1,
+                    fillColor: 'rgba(125,139,143,0.0)',
+                    interactive: true, // Changed to true untuk interaksi
+                }
+            }
+
+            // Popup function
+            function pop_WIUP_PESONAKHATULISTIWANUSANTARA_5(feature, layer) {
+                var popupContent = '<table>\
+                        <tr>\
+                            <td colspan="2"><strong>Informasi WIUP</strong></td>\
+                        </tr>\
+                        <tr>\
+                            <td>ID:</td>\
+                            <td>' + (feature.properties['id'] !== null ? autolinker.link(String(feature.properties['id'])) : '') + '</td>\
+                        </tr>\
+                        <tr>\
+                            <td>Nama:</td>\
+                            <td>' + (feature.properties['Nama'] !== null ? autolinker.link(String(feature.properties['Nama'])) : '') + '</td>\
+                        </tr>\
+                        <tr>\
+                            <td>FID:</td>\
+                            <td>' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid'])) : '') + '</td>\
+                        </tr>\
+                        <tr>\
+                            <td>DN:</td>\
+                            <td>' + (feature.properties['DN'] !== null ? autolinker.link(String(feature.properties['DN'])) : '') + '</td>\
+                        </tr>\
+                    </table>';
+                
+                layer.bindPopup(popupContent, { maxHeight: 400 });
+                
+                // Add click event untuk update dashboard
+                layer.on('click', function(e) {
+                    updateFeatureInfo(feature);
+                });
+            }
+
+            // Create vector layer
+            layer_WIUP_PESONAKHATULISTIWANUSANTARA_5 = new L.geoJson(json_WIUP_PESONAKHATULISTIWANUSANTARA_5, {
+                attribution: '',
+                interactive: true,
+                layerName: 'layer_WIUP_PESONAKHATULISTIWANUSANTARA_5',
+                pane: 'pane_WIUP_PESONAKHATULISTIWANUSANTARA_5',
+                onEachFeature: pop_WIUP_PESONAKHATULISTIWANUSANTARA_5,
+                style: style_WIUP_PESONAKHATULISTIWANUSANTARA_5_0,
+            });
+            map.addLayer(layer_WIUP_PESONAKHATULISTIWANUSANTARA_5);
+
+            // ==================== SEARCH CONTROL ====================
+            const url = {
+                "Nominatim OSM": "https://nominatim.openstreetmap.org/search?format=geojson&addressdetails=1&",
+                "France BAN": "https://api-adresse.data.gouv.fr/search/?"
+            };
+            
+            var photonControl = L.control.photon({
+                url: url["Nominatim OSM"],
+                feedbackLabel: '',
+                position: 'topright',
+                includePosition: true,
+                placeholder: 'Cari lokasi...'
+            }).addTo(map);
+
+            // ==================== COORDINATE DISPLAY ====================
+            map.on('mousemove', function(e) {
+                const lat = e.latlng.lat.toFixed(6);
+                const lng = e.latlng.lng.toFixed(6);
+                document.getElementById('coordinates').textContent = `${lat}, ${lng}`;
+            });
+
+            // Initialize statistics
+            updateStatistics();
+        }
+
+        // Layer toggle function
+        function toggleLayer(layerId, visible) {
+            // Map layerId ke actual layer variables
+            const layerMap = {
+                'google-satellite': layer_GoogleSatellite_0,
+                'wiup-slope': layer_WIUP_Slope_Class_1,
+                'wiup-ndvi': layer_WIUP_NDVI_Classified_2,
+                'wiup-sungai': layer_WIUP_Sungai_Distance_Class_3,
+                'resiliensi-index': layer_Resiliensi_Index_FINALtif_4,
+                'wiup-boundary': layer_WIUP_PESONAKHATULISTIWANUSANTARA_5
+            };
+            
+            if (layerMap[layerId] && map) {
+                if (visible) {
+                    map.addLayer(layerMap[layerId]);
+                } else {
+                    map.removeLayer(layerMap[layerId]);
+                }
+            }
+        }
+
+        // Update feature info di sidebar
+        function updateFeatureInfo(feature) {
+            const featureInfo = document.getElementById('feature-info');
+            
+            let resilienceLevel = 'Tidak Diketahui';
+            if (feature.properties['DN'] !== null) {
+                const dnValue = parseFloat(feature.properties['DN']);
+                if (dnValue > 150) {
+                    resilienceLevel = 'Tinggi';
+                } else if (dnValue > 100) {
+                    resilienceLevel = 'Sedang';
+                } else {
+                    resilienceLevel = 'Rendah';
+                }
+            }
+            
+            featureInfo.innerHTML = `
+                <div style="color: #ecf0f1;">
+                    <h6><i class="fas fa-map-pin"></i> ${feature.properties['Nama'] || 'Unnamed Feature'}</h6>
+                    <hr style="border-color: rgba(255,255,255,0.2); margin: 8px 0;">
+                    <div class="row">
+                        <div class="col-6">
+                            <small>ID</small><br>
+                            <strong>${feature.properties['id'] || '-'}</strong>
+                        </div>
+                        <div class="col-6">
+                            <small>FID</small><br>
+                            <strong>${feature.properties['fid'] || '-'}</strong>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <small>Nilai DN</small><br>
+                            <strong>${feature.properties['DN'] || '0'}</strong>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <small>Tingkat Resiliensi</small><br>
+                            <span class="badge bg-info">${resilienceLevel}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
